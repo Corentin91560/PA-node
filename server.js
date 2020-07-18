@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql');
 const fetch = require('node-fetch');
+//const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,213 +11,56 @@ const con = mysql.createConnection({
     user: config.user, //user mysql
     password: config.password, //password mysql
     database: config.database, //database mysql
-    socketPath: config.socketPath
 });
 
 app.use(express.json());
+//app.use(cors());
 
-con.connect( function(err) {
-    if (err) throw err;
+(async function () {
+  try {
+    await con.connect();
     console.log('Connected !');
+  } catch (err) { console.log(err.stack); }
+})();
+
+app.listen(PORT, function () {
+    console.log('Example app listening on port 3000 !');
 });
 
-// USER ROUTES
+setInterval(function () {
+    con.query('SELECT 1');
+}, 10000); // Keep connection alive
 
-app.post('/signup/user', async function (req, res) {
-    const { name } = req.body;
-    const { firstname } = req.body;
-    const { age } = req.body;
-    const { email } = req.body;
-    const { password } = req.body;
-    const { phone } = req.body;
-    const { profilpicture } = req.body;
+app.get('/', function (req, res) {
+    res.send('Hello World !')
+}); // Basic route
 
-    await con.query({
-        sql: 'INSERT INTO user (name, firstname, age, email, password, phone, profilpicture) VALUES (?,?,?,?,?,?,?)',
-        values: [name, firstname, age, email, password, phone, profilpicture]
-    }, function (err, result, fields) {
-        if (err) {
-            if (err.code == "ER_DUP_ENTRY") {
-                res.status(400).send({error: "email already exist"});
-            } else {
-                res.status(400).send(err);
-            }
-        } else {
-            console.log(result);
-            res.status(201).send();
-        }
-    });
-}); // create a new user in db
 
-app.post('/signin/user', async function (req, res) {
-    const { email } = req.body;
+// ADMIN ROUTES
+
+app.post('/signin/admin', async function (req, res) {
+    const { login } = req.body;
     const { password } = req.body;
 
     await con.query({
-        sql: 'SELECT * FROM user WHERE email = ? AND password = ?',
-        values: [email, password]
+        sql: 'SELECT * FROM admin WHERE login = ? AND password = ?',
+        values: [login, password]
     }, function (err, result, fields) {
         if (err) {
             res.status(500).send({error: "Internal Server Error"});
         }
         if (result.length > 0) {
-            console.log(result);
-            res.status(200).send(result);
+            console.log(JSON.stringify(result[0]));
+            res.status(200).send(JSON.stringify(result[0]));
         } else {
-            console.log(result);
-            res.status(401).send({error: "Email or password is incorrect"});
+            console.log({error: "Login or password is incorrect"});
+            res.status(401).send();
         }
     });
-}); // permit user to connect
+}); // permit admin to connect
 
-app.get('/users', function (req, res) {
-    con.query({
-        sql: 'SELECT iduser, name, firstname, age, profilpicture FROM user'
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get all users in db
-
-app.get('/user/:iduser', function (req, res) {
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'SELECT iduser, name, firstname, age, profilpicture, phone FROM user WHERE iduser = ?',
-        values: [iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get user by iduser
-
-app.get('/users/association/:idassociation', function (req, res) {
-    const { idassociation } = req.params;
-
-    con.query({
-        sql: 'SELECT DISTINCT user.* FROM post, user, association, event WHERE user.iduser = post.iduser AND post.idevent = event.idevent AND event.idassociation = association.idassociation AND association.idassociation = ?',
-        values: [idassociation]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get all users concerned by an association
-
-app.get('/user/detail/:iduser', function (req, res) {
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'SELECT * FROM user WHERE iduser = ?',
-        values: [iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(JSON.stringify(result[0]));
-    });
-}); // get user by iduser (Json Stringifyed)
-
-app.patch('/user/:iduser', function (req, res) {
-    const { name } = req.body;
-    const { firstname } = req.body;
-    const { phone } = req.body;
-    const { profilpicture } = req.body;
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'UPDATE user SET name = ?, firstname = ?, phone = ?, profilpicture = ? WHERE iduser = ?',
-        values: [name, firstname, phone, profilpicture, iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send();
-    });
-}); // modify user by iduser
-
-app.delete('/user/:iduser', function (req, res) {
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'DELETE FROM user WHERE iduser = ?',
-        values: [iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // delete user by iduser
 
 // ASSOCIATION ROUTES
-
-app.post('/signup/association', async function (req, res) {
-    const { name } = req.body;
-    const { email } = req.body;
-    const { password } = req.body;
-    const { logo } = req.body;
-    const { idcategory } = req.body;
-
-    await con.query({
-        sql: 'INSERT INTO association (name, email, password, logo, idcategory) VALUES (?,?,?,?,?)',
-        values: [name, email, password, logo, idcategory]
-    }, function (err, result, fields) {
-        if (err) {
-            if (err.code == "ER_DUP_ENTRY") {
-                res.status(400).send({error: "Email/Name already exist"});
-            } else {
-                res.status(400).send(err);
-            }
-        } else {
-            console.log(result.insertId);
-          const idassociation = result.insertId;
-          con.query({ //FakeEvent for association post without selected event
-              sql: 'INSERT INTO event(name, description, dateDeb, dateFin, location, maxBenevole, idcategory, idassociation, fakeevent) VALUES("","",\'2000-01-01 00:00:00\',\'2000-01-01 00:00:00\',"",0,7,?,true)',
-              values: [idassociation]
-          }, function (err, result, fields) {
-              if (err) {
-                  res.status(400).send(err);
-              } else {
-                  console.log(result);
-                  res.status(201).send(result);
-              }
-          });
-        }
-    });
-}); // create a new association in db
-
-app.post('/signin/association', async function (req, res) {
-    const { email } = req.body;
-    const { password } = req.body;
-
-    await con.query({
-        sql: 'SELECT * FROM association WHERE email = ? AND password = ?',
-        values: [email, password]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        if (result.length > 0) {
-            console.log(result);
-            res.status(200).send(result);
-        } else {
-            console.log(result);
-            res.status(401).send({error: "Email or password is incorrect"});
-        }
-    });
-}); // permit association to connect
 
 app.get('/associations', function (req, res) {
     con.query({
@@ -275,6 +119,62 @@ app.get('/associations/category/:idcategory', function (req, res) {
     });
 }); // get all associations concerned by a category
 
+app.post('/signup/association', async function (req, res) {
+    const { name } = req.body;
+    const { email } = req.body;
+    const { password } = req.body;
+    const { logo } = req.body;
+    const { idcategory } = req.body;
+
+    await con.query({
+        sql: 'INSERT INTO association (name, email, password, logo, idcategory) VALUES (?,?,?,?,?)',
+        values: [name, email, password, logo, idcategory]
+    }, function (err, result, fields) {
+        if (err) {
+            if (err.code == "ER_DUP_ENTRY") {
+                res.status(400).send({error: "Email/Name already exist"});
+            } else {
+                res.status(400).send(err);
+            }
+        } else {
+            console.log(result.insertId);
+          const idassociation = result.insertId;
+          con.query({ //FakeEvent for association post without selected event
+              sql: 'INSERT INTO event(name, description, startdate, enddate, location, maxbenevole, idcategory, idassociation, fakeevent) VALUES("","",\'2000-01-01 00:00:00\',\'2000-01-01 00:00:00\',"",0,7,?,true)',
+              values: [idassociation]
+          }, function (err, result, fields) {
+              if (err) {
+                  res.status(400).send(err);
+              } else {
+                  console.log(result);
+                  res.status(201).send(result);
+              }
+          });
+        }
+    });
+}); // create a new association in db
+
+app.post('/signin/association', async function (req, res) {
+    const { email } = req.body;
+    const { password } = req.body;
+
+    await con.query({
+        sql: 'SELECT * FROM association WHERE email = ? AND password = ?',
+        values: [email, password]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        if (result.length > 0) {
+            console.log(result);
+            res.status(200).send(result);
+        } else {
+            console.log(result);
+            res.status(401).send({error: "Email or password is incorrect"});
+        }
+    });
+}); // permit association to connect
+
 app.patch('/association/:idassociation', function (req, res) {
     const { name } = req.body;
     const { email } = req.body;
@@ -312,28 +212,6 @@ app.delete('/association/:idassociation', function (req, res) {
     });
 }); // delete association by idassociation
 
-// ADMIN ROUTES
-
-app.post('/signin/admin', async function (req, res) {
-    const { login } = req.body;
-    const { password } = req.body;
-
-    await con.query({
-        sql: 'SELECT * FROM admin WHERE login = ? AND password = ?',
-        values: [login, password]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        if (result.length > 0) {
-            console.log(JSON.stringify(result[0]));
-            res.status(200).send(JSON.stringify(result[0]));
-        } else {
-            console.log({error: "Login or password is incorrect"});
-            res.status(401).send();
-        }
-    });
-}); // permit admin to connect
 
 // CATEGORY ROUTES
 
@@ -364,6 +242,126 @@ app.get('/category/:idcategory', function (req, res) {
     });
 }); // get category by idcategory
 
+app.post('/category', function (req, res) {
+    const { name } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO category (name) VALUES (?)',
+        values: [name]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // create a new category in db
+
+
+// EVENT ROUTES
+
+app.get('/events/user/:iduser', function (req, res) {
+    const { iduser } = req.params;
+      con.query({
+          sql: 'SELECT event.* FROM user, association, event, follower WHERE user.iduser = follower.iduser AND follower.idassociation = association.idassociation AND association.idassociation = event.idassociation AND user.iduser = ? ORDER BY event.startdate DESC',
+          values: [iduser]
+      }, function (err, result, fields) {
+          if (err) {
+              res.status(500).send({error: "Internal Server Error"});
+          }
+          console.log(result);
+          res.status(200).send(result);
+      });
+  }); // get all events concerned an user
+
+app.get('/event/:idevent', function (req, res) {
+    const { idevent } = req.params;
+    con.query({
+        sql: 'SELECT * FROM event WHERE idevent = ?',
+        values: [idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get event by idevent
+
+app.get('/events/association/:idassociation', function (req, res) {
+    const { idassociation } = req.params;
+
+    con.query({
+        sql: 'SELECT * FROM event WHERE idassociation = ? ORDER BY event.startdate DESC',
+        values: [idassociation]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all events concerned by an association
+
+app.post('/event', function (req, res) {
+    const { name } = req.body;
+    const { description } = req.body;
+    const { startdate } = req.body;
+    const { enddate } = req.body;
+    const { location } = req.body;
+    const { maxbenevole } = req.body;
+    const { idcategory } = req.body;
+    const { idassociation } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO event (name, description, startdate, enddate, location, maxbenevole, idcategory, idassociation, fakeevent) VALUES (?,?,?,?,?,?,?,?,false)',
+        values: [name, description, startdate, enddate, location, maxbenevole, idcategory, idassociation]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // create an event
+
+app.patch('/event/:idevent', function (req, res) {
+    const { idevent } = req.params;
+    const { name } = req.body;
+    const { description } = req.body;
+    const { startdate } = req.body;
+    const { enddate } = req.body;
+    const { location } = req.body;
+    const { maxbenevole } = req.body;
+    const { idcategory } = req.body
+
+    con.query({
+        sql: 'UPDATE event SET name = ?, description = ?, startdate = ?, enddate = ?, location = ?, maxbenevole = ?, idcategory = ? WHERE idevent = ?',
+        values: [name, description, startdate, enddate, location, maxbenevole, idcategory, idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // modify an event by idevent
+
+app.delete('/event/:idevent', function (req, res) {
+    const { idevent } = req.params;
+
+    con.query({
+        sql: 'DELETE FROM event WHERE idevent = ?',
+        values: [idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        res.status(204).send();
+    });
+}); // delete an event by idevent
+
+
 // FEEDBACK ROUTES
 
 app.get('/feedback/:idtype', function (req, res) {
@@ -381,19 +379,19 @@ app.get('/feedback/:idtype', function (req, res) {
     });
 }); // get all feedback concerned by a type
 
-app.post('/feedback/bug', function (req, res) {
+/*app.post('/feedback/bug', cors(), function (req, res) {
     const { title } = req.body;
     const { content } = req.body;
     const { date } = req.body;
-    const { plateform } = req.body;
+    const { platform } = req.body;
     const { idtype } = req.body;
     const { iduser } = req.body;
     const { idassociation } = req.body;
 
     if(idassociation == null){
       con.query({
-          sql: 'INSERT INTO feedback (title, content, date, idtype, plateform, iduser) VALUES (?,?,?,?,?,?)',
-          values: [title, content, date, idtype, plateform, iduser]
+          sql: 'INSERT INTO feedback (title, content, date, idtype, platform, iduser) VALUES (?,?,?,?,?,?)',
+          values: [title, content, date, idtype, platform, iduser]
       }, function (err, result, fields) {
           if (err) {
             console.log(err);
@@ -403,10 +401,10 @@ app.post('/feedback/bug', function (req, res) {
           res.status(200).send();
       });
     }
-    if(iduser == null){
+    else if(iduser == null){
       con.query({
-          sql: 'INSERT INTO feedback (title, content, date, idtype, plateform, idassociation) VALUES (?,?,?,?,?,?)',
-          values: [title, content, date, idtype, plateform, idassociation]
+          sql: 'INSERT INTO feedback (title, content, date, idtype, platform, idassociation) VALUES (?,?,?,?,?,?)',
+          values: [title, content, date, idtype, platform, idassociation]
       }, function (err, result, fields) {
           if (err) {
             console.log(err);
@@ -418,10 +416,10 @@ app.post('/feedback/bug', function (req, res) {
     }
 }); // post a new feedback in db
 
-app.post('/feedback/rating', function (req, res) {
+app.post('/feedback/rating', cors(), function (req, res) {
     const { content } = req.body;
     const { date } = req.body;
-    const { plateform } = req.body;
+    const { platform } = req.body;
     const { idtype } = req.body;
     const { iduser } = req.body;
     const { idassociation } = req.body;
@@ -429,8 +427,8 @@ app.post('/feedback/rating', function (req, res) {
 
     if(idassociation == null){
       con.query({
-        sql: 'INSERT INTO feedback (content, date, idtype, plateform, iduser, note) VALUES (?,?,?,?,?,?)',
-        values: [content, date, idtype, plateform, iduser, note]
+        sql: 'INSERT INTO feedback (content, date, idtype, platform, iduser, note) VALUES (?,?,?,?,?,?)',
+        values: [content, date, idtype, platform, iduser, note]
       }, function (err, result, fields) {
         if (err) {
           console.log(err);
@@ -440,10 +438,10 @@ app.post('/feedback/rating', function (req, res) {
           res.status(200).send();
         });
       }
-      if(iduser == null){
+      else if(iduser == null){
         con.query({
-          sql: 'INSERT INTO feedback (content, date, idtype, plateform, idassociation, note) VALUES (?,?,?,?,?,?)',
-          values: [content, date, idtype, plateform, idassociation, note]
+          sql: 'INSERT INTO feedback (content, date, idtype, platform, idassociation, note) VALUES (?,?,?,?,?,?)',
+          values: [content, date, idtype, platform, idassociation, note]
         }, function (err, result, fields) {
           if (err) {
             console.log(err);
@@ -453,7 +451,7 @@ app.post('/feedback/rating', function (req, res) {
           res.status(200).send();
         });
       }
-}); // post a new rating in db
+}); // post a new rating in db*/
 
 app.put('/feedback/:idfeedback', function (req, res) {
     const { status } = req.body;
@@ -470,6 +468,312 @@ app.put('/feedback/:idfeedback', function (req, res) {
         res.status(200).send(JSON.stringify(result));
     });
 }); // modify a feedback by idfeedback
+
+
+//FOLLOW ROUTES
+
+app.get('/follow/:idassociation/:iduser',function (req, res) {
+    const { idassociation } = req.params;
+    const { iduser } = req.params;
+
+    con.query({
+        sql: 'SELECT * FROM follower WHERE idassociation = ? and iduser = ?',
+        values: [idassociation, iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all follows of an user
+
+app.post('/follow',function (req, res) {
+    const { idassociation } = req.body;
+    const { iduser } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO follower (idassociation, iduser) VALUES(?,?)',
+        values: [idassociation, iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // permit an user to follow an association
+
+app.delete('/unfollow',function (req, res) {
+    const { idassociation } = req.body;
+    const { iduser } = req.body;
+
+    con.query({
+        sql: 'DELETE FROM follower WHERE idassociation = ? AND iduser = ?',
+        values: [idassociation, iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // permit an user to unfollow an association
+
+
+// NEWS ROUTES
+
+/*app.get('/news',cors(),function (req, res) {
+
+    con.query({
+        sql: 'SELECT * FROM news ORDER BY date DESC LIMIT 3',
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all news
+
+app.post('/news',cors(),function (req, res) {
+    const { title } = req.body;
+    const { content } = req.body;
+    const { date } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO news (title, content, date) VALUES(?,?,?)',
+        values: [title, content, date]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // permit an admin to send a news*/
+
+
+// PARTICIPATION ROUTES
+
+app.get('/participants/:idev', function (req, res) {
+    const { idevent } = req.params;
+
+    con.query({
+        sql: 'SELECT user.iduser, user.name, user.firstname, user.profilpicture FROM participation, user WHERE participation.iduser = user.iduser AND participation.idevent = ? AND participation.status = 1 ORDER BY user.name',
+        values: [idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all participants of an event
+
+app.get('/participate/:idevent/:iduser',function (req, res) {
+    const { idevent } = req.params;
+    const { iduser } = req.params;
+
+    con.query({
+        sql: 'SELECT * FROM participation WHERE idevent = ? and iduser = ?',
+        values: [idevent, iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // permit to check if an user participe to an event
+
+app.post('/participate',function (req, res) {
+    const { idevent } = req.body;
+    const { iduser } = req.body;
+    const { participate } = req.body;
+    const { status } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO participation (idevent, iduser, participate, status) VALUES(?,?,?,?)',
+        values: [idevent, iduser, participate, status]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: err});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // permit an user to signup of an event
+ 
+app.patch('/participate/refuse',function (req, res) {
+    const { status } = req.body;
+    const { participate } = req.body;
+    const { idevent } = req.body;
+    const { iduser } = req.body;
+
+    if (status == 0) {
+        con.query({
+            sql: 'UPDATE participation SET status = ?, participate = ? WHERE idevent = ? AND iduser = ?',
+            values: [status, participate, idevent, iduser]
+        }, function (err, result, fields) {
+            if (err) {
+                res.status(500).send({error: "Internal Server Error"});
+            }
+            console.log(result);
+            res.status(200).send();
+        });
+    } else {
+        res.status(400).send();
+    }
+}); // permit an use to signout of an event
+
+app.patch('/participate/status',function (req, res) {
+    const { idevent } = req.body;
+    const { iduser } = req.body;
+    const { status } = req.body;
+    const { startdate } = req.body;
+    const { enddate } = req.body;
+    const { participate } = req.body;
+
+    con.query({
+        sql: 'SELECT startdate FROM participation WHERE idevent = ? and iduser = ?',
+        values: [idevent,iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result[0].startdate);
+        if (result[0].startdate == null) {
+          if (status == 1) {
+            con.query({
+                sql: 'UPDATE participation SET startdate = ?, participate = ? WHERE idevent = ? AND iduser = ?',
+                values: [startdate, participate, idevent, iduser]
+            }, function (err, result, fields) {
+                if (err) {
+                    res.status(500).send({error: "Internal Server Error"});
+                }
+                console.log(result);
+                res.status(200).send();
+            });
+          } else {
+              res.status(400).send();
+          }
+        } else {
+          if (status == 1) {
+            con.query({
+                sql: 'UPDATE participation SET enddate = ? WHERE idevent = ? AND iduser = ?',
+                values: [enddate, idevent, iduser]
+            }, function (err, result, fields) {
+                if (err) {
+                    res.status(500).send({error: "Internal Server Error"});
+                }
+                console.log(result);
+                res.status(200).send();
+            });
+          } else {
+              res.status(400).send();
+          }
+        }
+    });
+}); // permit to update participation
+
+
+// POSTS ROUTES
+
+app.get('/posts/:iduser', function (req, res) {
+    const { iduser } = req.params;
+      con.query({
+          sql: 'SELECT post.*, event.name AS eventname, association.acronym AS assoacro, association.logo AS pictureprofilasso FROM user, association, event, follower, post WHERE user.iduser = follower.iduser AND follower.idassociation = association.idassociation AND association.idassociation = event.idassociation AND event.idevent = post.idevent AND user.iduser = ? ORDER BY post.date DESC',
+          values: [iduser]
+      }, function (err, result, fields) {
+          if (err) {
+              res.status(500).send({error: "Internal Server Error"});
+          }
+          console.log(result);
+          res.status(200).send(result);
+      });
+  }); // get all posts concerned by an user
+
+app.get('/posts/association/:idassociation', function (req, res) {
+    const { idassociation } = req.params;
+
+    con.query({
+        sql: 'SELECT post.idpost, post.message, post.date, post.iduser, post.idassociation, post.idevent FROM post, event WHERE post.idevent = event.idevent AND event.idassociation = ? ORDER BY post.date DESC',
+        values: [idassociation]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all posts concerned by an event of an association
+
+app.get('/posts/:idassociation', function (req, res) {
+    const { idassociation } = req.params;
+
+    con.query({
+        sql: 'SELECT * FROM post WHERE idassociation = ?',
+        values: [idassociation]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all posts of an association
+
+app.post('/post/association', function (req, res) {
+    const { message } = req.body;
+    const { date } = req.body;
+    const { idassociation } = req.body;
+    const { idevent } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO post (message, date, idassociation, idevent) VALUES (?,?,?,?)',
+        values: [message, date, idassociation, idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // create post from an account association
+
+app.post('/post/user', function (req, res) {
+    const { message } = req.body;
+    const { date } = req.body;
+    const { iduser } = req.body;
+    const { idevent } = req.body;
+
+    con.query({
+        sql: 'INSERT INTO post (message, date, iduser, idevent) VALUES (?,?,?,?)',
+        values: [message, date, iduser, idevent]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // create post from an account user
+
+app.delete('/post/:idpost', function (req, res) {
+    const { idpost } = req.params;
+
+    con.query({
+        sql: 'DELETE FROM post WHERE idpost = ?',
+        values: [idpost]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        res.status(204).send();
+    });
+}); // delete a post by idpost
+
 
 // TRELLO ROUTES
 
@@ -575,12 +879,26 @@ app.post('/trello/feedback', async function (req, res) {
     }
 }); // add a new feedback on trello
 
-// FEED ROUTES
 
-app.get('/posts/:iduser', function (req, res) {
-  const { iduser } = req.params;
+// USER ROUTES
+
+app.get('/users', function (req, res) {
     con.query({
-        sql: 'SELECT post.*, event.name AS eventname, association.acronym AS assoacro, association.logo AS pictureprofilasso FROM user, association, event, follower, post WHERE user.iduser = follower.iduser AND follower.idassociation = association.idassociation AND association.idassociation = event.idassociation AND event.idevent = post.idevent AND user.iduser = ? ORDER BY post.date DESC',
+        sql: 'SELECT iduser, name, firstname, birthdate, profilpicture FROM user'
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // get all users in db
+
+app.get('/user/:iduser', function (req, res) {
+    const { iduser } = req.params;
+
+    con.query({
+        sql: 'SELECT iduser, name, firstname, birthdate, profilpicture, phone FROM user WHERE iduser = ?',
         values: [iduser]
     }, function (err, result, fields) {
         if (err) {
@@ -589,13 +907,13 @@ app.get('/posts/:iduser', function (req, res) {
         console.log(result);
         res.status(200).send(result);
     });
-}); // get all posts concerned by an user
+}); // get user by iduser
 
-app.get('/posts/association/:idassociation', function (req, res) {
+app.get('/users/association/:idassociation', function (req, res) {
     const { idassociation } = req.params;
 
     con.query({
-        sql: 'SELECT post.idpost, post.message, post.date, post.iduser, post.idassociation, post.idevent FROM post, event WHERE post.idevent = event.idevent AND event.idassociation = ? ORDER BY post.date DESC',
+        sql: 'SELECT DISTINCT user.* FROM post, user, association, event WHERE user.iduser = post.iduser AND post.idevent = event.idevent AND event.idassociation = association.idassociation AND association.idassociation = ?',
         values: [idassociation]
     }, function (err, result, fields) {
         if (err) {
@@ -604,339 +922,74 @@ app.get('/posts/association/:idassociation', function (req, res) {
         console.log(result);
         res.status(200).send(result);
     });
-}); // get all posts concerned by an event of an association
+}); // get all users concerned by an association
 
-app.get('/posts/:idassociation', function (req, res) {
-    const { idassociation } = req.params;
-
-    con.query({
-        sql: 'SELECT * FROM post WHERE idassociation = ?',
-        values: [idassociation]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get all posts of an association
-
-app.post('/post/association', function (req, res) {
-    const { message } = req.body;
-    const { date } = req.body;
-    const { idassociation } = req.body;
-    const { idevent } = req.body;
+app.get('/user/detail/:iduser', function (req, res) {
+    const { iduser } = req.params;
 
     con.query({
-        sql: 'INSERT INTO post (message, date, idassociation, idevent) VALUES (?,?,?,?)',
-        values: [message, date, idassociation, idevent]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // create post from an account association
-
-app.post('/post/user', function (req, res) {
-    const { message } = req.body;
-    const { date } = req.body;
-    const { iduser } = req.body;
-    const { idevent } = req.body;
-
-    con.query({
-        sql: 'INSERT INTO post (message, date, iduser, idevent) VALUES (?,?,?,?)',
-        values: [message, date, iduser, idevent]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // create post from an account user
-
-app.delete('/post/:idpost', function (req, res) {
-    const { idpost } = req.params;
-
-    con.query({
-        sql: 'DELETE FROM posts WHERE idpost = ?',
-        values: [idpost]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        res.status(204).send();
-    });
-}); // delete a post by idpost
-
-// EVENT ROUTES
-
-app.get('/events/user/:iduser', function (req, res) {
-  const { iduser } = req.params;
-    con.query({
-        sql: 'SELECT event.* FROM user, association, event, follower WHERE user.iduser = follower.iduser AND follower.idassociation = association.idassociation AND association.idassociation = event.idassociation AND user.iduser = ? ORDER BY event.dateDeb DESC',
+        sql: 'SELECT * FROM user WHERE iduser = ?',
         values: [iduser]
     }, function (err, result, fields) {
         if (err) {
             res.status(500).send({error: "Internal Server Error"});
         }
         console.log(result);
-        res.status(200).send(result);
+        res.status(200).send(JSON.stringify(result[0]));
     });
-}); // get all events concerned an user
+}); // get user by iduser (Json Stringifyed)
 
-app.get('/event/:idevent', function (req, res) {
-    const { idevent } = req.params;
-    con.query({
-        sql: 'SELECT * FROM event WHERE idevent = ?',
-        values: [idevent]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get event by idevent
-
-app.get('/events/association/:idassociation', function (req, res) {
-    const { idassociation } = req.params;
-
-    con.query({
-        sql: 'SELECT * FROM event WHERE idassociation = ? ORDER BY event.dateDeb DESC',
-        values: [idassociation]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get all events concerned by an association
-
-app.post('/event', function (req, res) {
+app.post('/signup/user', async function (req, res) {
     const { name } = req.body;
-    const { description } = req.body;
-    const { dateDeb } = req.body;
-    const { dateFin } = req.body;
-    const { location } = req.body;
-    const { maxBenevole } = req.body;
-    const { idcategory } = req.body;
-    const { idassociation } = req.body;
+    const { firstname } = req.body;
+    const { birthdate } = req.body;
+    const { email } = req.body;
+    const { password } = req.body;
+    const { phone } = req.body;
+    const { profilpicture } = req.body;
 
-    con.query({
-        sql: 'INSERT INTO event (name, description, dateDeb, dateFin, location, maxBenevole, idcategory, idassociation, fakeevent) VALUES (?,?,?,?,?,?,?,?,false)',
-        values: [name, description, dateDeb, dateFin, location, maxBenevole, idcategory, idassociation]
+    await con.query({
+        sql: 'INSERT INTO user (name, firstname, birthdate, email, password, phone, profilpicture) VALUES (?,?,?,?,?,?,?)',
+        values: [name, firstname, birthdate, email, password, phone, profilpicture]
     }, function (err, result, fields) {
         if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // create an event
-
-app.patch('/event/:idevent', function (req, res) {
-    const { idevent } = req.params;
-    const { name } = req.body;
-    const { description } = req.body;
-    const { dateDeb } = req.body;
-    const { dateFin } = req.body;
-    const { location } = req.body;
-    const { maxBenevole } = req.body;
-
-    con.query({
-        sql: 'UPDATE event SET name = ?, description = ?, dateDeb = ?, dateFin = ?, location = ?, maxBenevole = ? WHERE idevent = ?',
-        values: [name, description, dateDeb, dateFin, location, maxBenevole, idevent]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // modify an event by idevent
-
-app.delete('/event/:idev', function (req, res) {
-    const { idev } = req.params;
-
-    con.query({
-        sql: 'DELETE FROM event WHERE idev = ?',
-        values: [idev]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: "Internal Server Error"});
-        }
-        res.status(204).send();
-    });
-}); // delete an event by idevent
-
-//FOLLOW ROUTES
-
-app.post('/follow',function (req, res) {
-    const { idassociation } = req.body;
-    const { iduser } = req.body;
-
-    con.query({
-        sql: 'INSERT INTO follower (idassociation, iduser) VALUES(?,?)',
-        values: [idassociation, iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: err});
-        }
-        console.log(result);
-        res.status(200).send();
-    });
-}); // permit an user to follow an association
-
-app.get('/follow/:idassociation/:iduser',function (req, res) {
-    const { idassociation } = req.params;
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'SELECT * FROM follower WHERE idassociation = ? and iduser = ?',
-        values: [idassociation, iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: err});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // get all follows of an user
-
-app.delete('/unfollow',function (req, res) {
-    const { idassociation } = req.body;
-    const { iduser } = req.body;
-
-    con.query({
-        sql: 'DELETE FROM follower WHERE idassociation = ? AND iduser = ?',
-        values: [idassociation, iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: err});
-        }
-        console.log(result);
-        res.status(200).send();
-    });
-}); // permit an user to unfollow an association
-
-// PARTICIPATION ROUTES
-
-app.get('/participate/:idevent/:iduser',function (req, res) {
-    const { idevent } = req.params;
-    const { iduser } = req.params;
-
-    con.query({
-        sql: 'SELECT * FROM participation WHERE idevent = ? and iduser = ?',
-        values: [idevent, iduser]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: err});
-        }
-        console.log(result);
-        res.status(200).send(result);
-    });
-}); // permit to check if an user participe to an event
-
-app.post('/participate',function (req, res) {
-    const { idevent } = req.body;
-    const { iduser } = req.body;
-    const { participate } = req.body;
-    const { status } = req.body;
-
-    con.query({
-        sql: 'INSERT INTO participation (idevent, iduser, participate, status) VALUES(?,?,?,?)',
-        values: [idevent, iduser, participate, status]
-    }, function (err, result, fields) {
-        if (err) {
-            res.status(500).send({error: err});
-        }
-        console.log(result);
-        res.status(200).send();
-    });
-}); // permit an user to signup of an event
-
-app.patch('/participate/refuse',function (req, res) {
-    const { status } = req.body;
-    const { participate } = req.body;
-    const { idevent } = req.body;
-    const { iduser } = req.body;
-
-    if (status == 0) {
-        con.query({
-            sql: 'UPDATE participation SET status = ?, participate = ? WHERE idevent = ? AND iduser = ?',
-            values: [status, participate, idevent, iduser]
-        }, function (err, result, fields) {
-            if (err) {
-                res.status(500).send({error: "Internal Server Error"});
+            if (err.code == "ER_DUP_ENTRY") {
+                res.status(400).send({error: "email already exist"});
+            } else {
+                res.status(400).send(err);
             }
+        } else {
             console.log(result);
-            res.status(200).send();
-        });
-    } else {
-        res.status(400).send();
-    }
-}); // permit an use to signout of an event
+            res.status(201).send();
+        }
+    });
+}); // create a new user in db
 
-app.patch('/participate/status',function (req, res) {
-    const { idevent } = req.body;
-    const { iduser } = req.body;
-    const { status } = req.body;
-    const { startdate } = req.body;
-    const { enddate } = req.body;
-    const { participate } = req.body;
+app.post('/signin/user', async function (req, res) {
+    const { email } = req.body;
+    const { password } = req.body;
 
-    con.query({
-        sql: 'SELECT startdate FROM participation WHERE idevent = ? and iduser = ?',
-        values: [idevent,iduser]
+    await con.query({
+        sql: 'SELECT * FROM user WHERE email = ? AND password = ?',
+        values: [email, password]
     }, function (err, result, fields) {
         if (err) {
             res.status(500).send({error: "Internal Server Error"});
         }
-        console.log(result[0].startdate);
-        if (result[0].startdate == null) {
-          if (status == 1) {
-            con.query({
-                sql: 'UPDATE participation SET startdate = ?, participate = ? WHERE idevent = ? AND iduser = ?',
-                values: [startdate, participate, idevent, iduser]
-            }, function (err, result, fields) {
-                if (err) {
-                    res.status(500).send({error: "Internal Server Error"});
-                }
-                console.log(result);
-                res.status(200).send();
-            });
-          } else {
-              res.status(400).send();
-          }
+        if (result.length > 0) {
+            console.log(result);
+            res.status(200).send(result);
         } else {
-          if (status == 1) {
-            con.query({
-                sql: 'UPDATE participation SET enddate = ? WHERE idevent = ? AND iduser = ?',
-                values: [enddate, idevent, iduser]
-            }, function (err, result, fields) {
-                if (err) {
-                    res.status(500).send({error: "Internal Server Error"});
-                }
-                console.log(result);
-                res.status(200).send();
-            });
-          } else {
-              res.status(400).send();
-          }
+            console.log(result);
+            res.status(401).send({error: "Email or password is incorrect"});
         }
     });
-}); // permit to update participation
+}); // permit user to connect
 
-app.get('/participants/:idev', function (req, res) {
-    const { idevent } = req.params;
+app.get('/statistic', function (req, res) {
 
     con.query({
-        sql: 'SELECT user.iduser, user.name, user.firstname, user.profilpicture FROM participation, user WHERE participation.iduser = user.iduser AND participation.idevent = ? AND participation.status = 1 ORDER BY user.name',
-        values: [idevent]
+        sql: 'SELECT (SELECT COUNT(*) FROM user) AS numberuser, (SELECT COUNT(*) FROM association) AS numberassociation, (SELECT AVG(postbyevent.numberposts) AS averagepostperevent FROM (SELECT COUNT(*) AS numberposts FROM post GROUP BY idevent) AS postbyevent, post GROUP BY post.idevent LIMIT 1 ) AS averagepostbyevent, (SELECT COUNT(*) FROM event WHERE startdate > now()) AS numbereventnotstarted, (SELECT COUNT(*) FROM event WHERE startdate < now() and enddate > now()) AS numbereventinprogress, (SELECT COUNT(*) FROM event WHERE enddate < now()) AS numbereventended, (SELECT AVG(eventperasso.numberevent) AS averageeventperasso FROM (SELECT COUNT(*) AS numberevent FROM event GROUP BY idassociation) AS eventperasso, event GROUP BY event.idassociation LIMIT 1) AS averageeventperasso',
     }, function (err, result, fields) {
         if (err) {
             res.status(500).send({error: "Internal Server Error"});
@@ -944,8 +997,38 @@ app.get('/participants/:idev', function (req, res) {
         console.log(result);
         res.status(200).send(result);
     });
-}); // get all participants of an event
+}); // get all statistic from db
 
-app.listen(3000, function () {
-    console.log('Example app listening on port 3000 !');
-});
+app.patch('/user/:iduser', function (req, res) {
+    const { name } = req.body;
+    const { firstname } = req.body;
+    const { phone } = req.body;
+    const { profilpicture } = req.body;
+    const { iduser } = req.params;
+
+    con.query({
+        sql: 'UPDATE user SET name = ?, firstname = ?, phone = ?, profilpicture = ? WHERE iduser = ?',
+        values: [name, firstname, phone, profilpicture, iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send();
+    });
+}); // modify user by iduser
+
+app.delete('/user/:iduser', function (req, res) {
+    const { iduser } = req.params;
+
+    con.query({
+        sql: 'DELETE FROM user WHERE iduser = ?',
+        values: [iduser]
+    }, function (err, result, fields) {
+        if (err) {
+            res.status(500).send({error: "Internal Server Error"});
+        }
+        console.log(result);
+        res.status(200).send(result);
+    });
+}); // delete user by iduser
